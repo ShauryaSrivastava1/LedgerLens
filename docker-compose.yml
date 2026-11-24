@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: equity_user
+      POSTGRES_PASSWORD: equity_pass
+      POSTGRES_DB: equity_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U equity_user -d equity_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://equity_user:equity_pass@db:5432/equity_platform
+      DOCUMENT_STORAGE_PATH: /data/documents
+      CHROMA_PERSIST_PATH: /data/chroma
+      EMBEDDING_MODEL_NAME: all-MiniLM-L6-v2
+      LLM_PROVIDER: anthropic
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: claude-sonnet-4-5
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-change-me-in-production}
+      ACCESS_TOKEN_EXPIRE_MINUTES: 10080
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app  # hot-reload friendly for dev; remove for prod images
+      - documents_data:/data/documents
+      - chroma_data:/data/chroma
+
+volumes:
+  pgdata:
+  documents_data:
+  chroma_data:
